@@ -11,7 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 
 from app.auto_capture import AutoCaptureManager
 from app.backup import BackupManager
-from app.config import Settings, get_settings
+from app.config import Settings, build_settings_from_payload, get_settings, settings_to_api_dict
+from app.config_store import ConfigStore
 from app.debug_store import RecognitionDebugStore
 from app.feedback_models import (
     PendingBatchLabelRequest,
@@ -43,6 +44,8 @@ logging.basicConfig(level=logging.INFO)
 class AppServices:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.config_store = ConfigStore(settings)
+        self.config_store.ensure_defaults(settings)
         self.metrics = Metrics()
         self.frame_store = FrameStore(settings)
         self.debug_store = RecognitionDebugStore()
@@ -79,6 +82,7 @@ class AppServices:
             debug_store=self.debug_store,
         )
         self.heartbeat_task: asyncio.Task[None] | None = None
+        self.runtime_started = False
 
     async def start(self) -> None:
         def listener(payload: ElevatorStatePayload, changed: bool) -> None:
@@ -89,8 +93,10 @@ class AppServices:
         self.mqtt.start()
         self.heartbeat_task = asyncio.create_task(self._heartbeat_loop(), name="heartbeat-loop")
         await self.rtsp_worker.start()
+        self.runtime_started = True
 
     async def stop(self) -> None:
+        self.runtime_started = False
         if self.heartbeat_task is not None:
             self.heartbeat_task.cancel()
             try:
@@ -127,9 +133,49 @@ class AppServices:
             "direction_loaded": direction_loaded,
         }
 
+    async def apply_settings(self, new_settings: Settings) -> None:
+        old = self.settings.model_dump(mode="python")
+        new = new_settings.model_dump(mode="python")
+        rtsp_restart_required = any(
+            old[key] != new[key]
+            for key in ("rtsp_url", "rtsp_transport", "rtsp_flush_frames")
+        )
+        mqtt_restart_required = any(
+            old[key] != new[key]
+            for key in ("mqtt_broker_url", "mqtt_client_id")
+        )
+        reload_models_required = old["model_dir"] != new["model_dir"]
+        reload_matchers_required = old["allowed_floors"] != new["allowed_floors"]
+
+        for key in new:
+            if key == "data_dir":
+                continue
+            setattr(self.settings, key, getattr(new_settings, key))
+
+        logging.getLogger().setLevel(self.settings.log_level.upper())
+        await self.state_manager.update_config(
+            elevator_id=self.settings.elevator_id,
+            stable_frames=self.settings.stable_frames,
+            heartbeat_seconds=self.settings.mqtt_heartbeat_seconds,
+        )
+
+        if reload_matchers_required:
+            await self.reload_sample_matchers()
+        if reload_models_required:
+            await self.reload_models()
+        if mqtt_restart_required and self.runtime_started:
+            self.mqtt.stop()
+            self.mqtt.start()
+        if rtsp_restart_required and self.runtime_started:
+            await self.rtsp_worker.restart()
+
 
 def create_app(settings: Settings | None = None, *, start_runtime: bool = True) -> FastAPI:
-    resolved_settings = settings or get_settings()
+    if settings is None:
+        bootstrap_settings = get_settings()
+        resolved_settings = ConfigStore(bootstrap_settings).load_settings(bootstrap_settings)
+    else:
+        resolved_settings = settings
     services = AppServices(resolved_settings)
 
     @asynccontextmanager
@@ -223,6 +269,21 @@ def create_app(settings: Settings | None = None, *, start_runtime: bool = True) 
     @app.get("/api/v1/feedback/stats", response_model=FeedbackStatsResponse)
     async def feedback_stats() -> FeedbackStatsResponse:
         return FeedbackStatsResponse.model_validate(services.feedback_store.stats())
+
+    @app.get("/api/v1/config")
+    async def config() -> JSONResponse:
+        return JSONResponse(settings_to_api_dict(services.settings))
+
+    @app.post("/api/v1/config")
+    async def save_config(request: Request) -> JSONResponse:
+        payload = await request.json()
+        try:
+            new_settings = build_settings_from_payload(services.settings, payload)
+        except Exception as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        services.config_store.save_settings(new_settings)
+        await services.apply_settings(new_settings)
+        return JSONResponse({"status": "ok", "config": settings_to_api_dict(services.settings)})
 
     @app.get("/api/v1/feedback/coverage", response_model=FloorCoverageResponse)
     async def feedback_coverage() -> FloorCoverageResponse:

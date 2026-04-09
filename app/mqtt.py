@@ -15,6 +15,7 @@ class MqttPublisher:
     enabled: bool = field(default=True, init=False)
 
     def start(self) -> None:
+        self.enabled = True
         parsed = urlparse(self.settings.mqtt_broker_url)
         if not parsed.hostname:
             self.enabled = False
@@ -41,6 +42,7 @@ class MqttPublisher:
             return
         self.client.loop_stop()
         self.client.disconnect()
+        self.client = None
 
     def publish_state(self, payload: ElevatorStatePayload) -> None:
         if not self.enabled or self.client is None:

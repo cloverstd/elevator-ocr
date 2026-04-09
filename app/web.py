@@ -464,6 +464,20 @@ INDEX_HTML = """<!doctype html>
         color: var(--ink);
         font: inherit;
       }
+      .field textarea,
+      .field select {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(23, 32, 42, 0.14);
+        background: rgba(255, 255, 255, 0.96);
+        color: var(--ink);
+        font: inherit;
+      }
+      .field textarea {
+        min-height: 78px;
+        resize: vertical;
+      }
       .training-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -584,6 +598,23 @@ INDEX_HTML = """<!doctype html>
         display: grid;
         gap: 12px;
       }
+      .pending-focus {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+      }
+      .pending-controls {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+      }
+      .pending-input-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+      }
       .pending-batch-actions {
         display: flex;
         gap: 8px;
@@ -599,7 +630,7 @@ INDEX_HTML = """<!doctype html>
       }
       .pending-image {
         display: block;
-        width: 100%;
+        width: 220px;
         height: auto;
         border-radius: 12px;
         background: #111;
@@ -607,15 +638,17 @@ INDEX_HTML = """<!doctype html>
       }
       .pending-list {
         display: grid;
-        gap: 8px;
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+        gap: 10px;
         max-height: 280px;
         overflow: auto;
       }
       .pending-item {
         display: grid;
-        grid-template-columns: auto 76px minmax(0, 1fr);
-        gap: 10px;
-        align-items: center;
+        grid-template-columns: auto 1fr;
+        grid-template-rows: auto auto;
+        gap: 8px;
+        align-items: start;
         padding: 8px;
         border-radius: 12px;
         border: 0;
@@ -631,16 +664,18 @@ INDEX_HTML = """<!doctype html>
       }
       .pending-thumb {
         display: block;
-        width: 76px;
-        height: 46px;
-        object-fit: cover;
+        width: 100%;
+        height: 92px;
+        object-fit: contain;
         border-radius: 8px;
         background: #111;
+        grid-column: 1 / span 2;
       }
       .pending-check {
-        width: 16px;
-        height: 16px;
+        width: 22px;
+        height: 22px;
         accent-color: #176087;
+        margin-top: 2px;
       }
       .pending-item-meta {
         min-width: 0;
@@ -658,6 +693,16 @@ INDEX_HTML = """<!doctype html>
         text-transform: uppercase;
         color: var(--muted);
       }
+      .config-details summary {
+        list-style: none;
+        cursor: pointer;
+      }
+      .config-details summary::-webkit-details-marker {
+        display: none;
+      }
+      .config-details[open] summary {
+        margin-bottom: 12px;
+      }
       @media (max-width: 900px) {
         .layout {
           grid-template-columns: 1fr;
@@ -669,6 +714,16 @@ INDEX_HTML = """<!doctype html>
         .stats-emphasis,
         .coverage-grid {
           grid-template-columns: 1fr;
+        }
+        .pending-focus {
+          grid-template-columns: 1fr;
+        }
+        .pending-input-row {
+          grid-template-columns: 1fr;
+        }
+        .pending-image {
+          width: 100%;
+          max-width: 260px;
         }
       }
     </style>
@@ -732,7 +787,6 @@ INDEX_HTML = """<!doctype html>
                     <div class="roi-actions">
                       <button id="floor-rotate-minus" class="secondary" type="button">-1°</button>
                       <button id="floor-rotate-plus" class="secondary" type="button">+1°</button>
-                      <button id="copy-floor" type="button">复制</button>
                     </div>
                   </div>
                   <p id="floor-roi-text" class="roi-code">FLOOR_ROI=--</p>
@@ -743,17 +797,15 @@ INDEX_HTML = """<!doctype html>
                     <div class="roi-actions">
                       <button id="direction-rotate-minus" class="secondary" type="button">-1°</button>
                       <button id="direction-rotate-plus" class="secondary" type="button">+1°</button>
-                      <button id="copy-direction" type="button">复制</button>
                     </div>
                   </div>
                   <p id="direction-roi-text" class="roi-code">DIRECTION_ROI=--</p>
                 </div>
                 <div class="roi-card">
                   <div class="roi-actions">
-                    <button id="copy-both" type="button">复制两项</button>
                     <button id="reset-roi" class="secondary" type="button">重置</button>
                   </div>
-                  <p class="hint">拖动框内部可移动位置，拖动圆点可调整大小。数值使用原始像素坐标，可直接粘贴到 `.env`。</p>
+                  <p class="hint">拖动框内部可移动位置，拖动圆点可调整大小。楼层 ROI 和方向 ROI 会自动保存到数据库。</p>
                 </div>
               </div>
             </div>
@@ -841,12 +893,18 @@ INDEX_HTML = """<!doctype html>
               </div>
             </div>
             <div class="pending-view">
-              <img id="pending-floor-image" class="pending-image" alt="待标楼层样本">
-              <div id="pending-floor-meta" class="feedback-status">当前没有待标楼层样本。</div>
-              <input id="pending-floor-label-input" class="feedback-input" type="text" placeholder="输入这张待标样本的楼层">
-              <div class="roi-actions">
-                <button id="pending-floor-submit" class="secondary" type="button">提交标注</button>
-                <button id="pending-floor-next" class="secondary" type="button">下一张</button>
+              <div class="pending-focus">
+                <img id="pending-floor-image" class="pending-image" alt="待标楼层样本">
+                <div class="pending-controls">
+                  <div id="pending-floor-meta" class="feedback-status">当前没有待标楼层样本。</div>
+                  <div class="pending-input-row">
+                    <input id="pending-floor-label-input" class="feedback-input" type="text" placeholder="输入这张待标样本的楼层">
+                    <div class="roi-actions">
+                      <button id="pending-floor-submit" class="secondary" type="button">提交标注</button>
+                      <button id="pending-floor-next" class="secondary" type="button">下一张</button>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div id="pending-batch-actions" class="pending-batch-actions">
                 <button id="pending-floor-select-all" class="secondary" type="button">全选本页</button>
@@ -919,6 +977,117 @@ INDEX_HTML = """<!doctype html>
               </div>
             </div>
           </section>
+          <section class="stats-card">
+            <details id="config-details" class="config-details">
+              <summary class="preview-title">系统配置</summary>
+            <div class="field-grid">
+              <div class="field">
+                <label for="config-rtsp-url">RTSP 地址</label>
+                <input id="config-rtsp-url" type="text">
+              </div>
+              <div class="field">
+                <label for="config-rtsp-transport">RTSP 传输</label>
+                <select id="config-rtsp-transport">
+                  <option value="tcp">tcp</option>
+                  <option value="udp">udp</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="config-elevator-id">电梯 ID</label>
+                <input id="config-elevator-id" type="text">
+              </div>
+              <div class="field">
+                <label for="config-allowed-floors">允许楼层</label>
+                <textarea id="config-allowed-floors"></textarea>
+              </div>
+              <div class="field">
+                <label for="config-floor-roi">楼层 ROI</label>
+                <input id="config-floor-roi" type="text">
+              </div>
+              <div class="field">
+                <label for="config-direction-roi">方向 ROI</label>
+                <input id="config-direction-roi" type="text">
+              </div>
+              <div class="field">
+                <label for="config-sample-interval">抽帧间隔 ms</label>
+                <input id="config-sample-interval" type="number" min="1">
+              </div>
+              <div class="field">
+                <label for="config-stable-frames">稳定帧数</label>
+                <input id="config-stable-frames" type="number" min="1">
+              </div>
+              <div class="field">
+                <label for="config-disconnect-timeout">断流超时 s</label>
+                <input id="config-disconnect-timeout" type="number" min="1">
+              </div>
+              <div class="field">
+                <label for="config-rtsp-flush">读取丢帧数</label>
+                <input id="config-rtsp-flush" type="number" min="1">
+              </div>
+              <div class="field">
+                <label for="config-mqtt-broker">MQTT Broker</label>
+                <input id="config-mqtt-broker" type="text">
+              </div>
+              <div class="field">
+                <label for="config-mqtt-topic">MQTT Topic</label>
+                <input id="config-mqtt-topic" type="text">
+              </div>
+              <div class="field">
+                <label for="config-mqtt-heartbeat">MQTT 心跳 s</label>
+                <input id="config-mqtt-heartbeat" type="number" min="1">
+              </div>
+              <div class="field">
+                <label for="config-mqtt-client-id">MQTT Client ID</label>
+                <input id="config-mqtt-client-id" type="text">
+              </div>
+              <div class="field">
+                <label for="config-tesseract-cmd">Tesseract 路径</label>
+                <input id="config-tesseract-cmd" type="text">
+              </div>
+              <div class="field">
+                <label for="config-log-level">日志级别</label>
+                <input id="config-log-level" type="text">
+              </div>
+              <div class="field">
+                <label for="config-direction-threshold">方向模板阈值</label>
+                <input id="config-direction-threshold" type="number" step="0.01" min="0" max="1">
+              </div>
+              <div class="field">
+                <label for="config-floor-sample-threshold">楼层样本阈值</label>
+                <input id="config-floor-sample-threshold" type="number" step="0.01" min="0" max="1">
+              </div>
+              <div class="field">
+                <label for="config-direction-sample-threshold">方向样本阈值</label>
+                <input id="config-direction-sample-threshold" type="number" step="0.01" min="0" max="1">
+              </div>
+              <div class="field">
+                <label for="config-floor-model-confidence">楼层模型最小置信度</label>
+                <input id="config-floor-model-confidence" type="number" step="0.01" min="0" max="1">
+              </div>
+              <div class="field">
+                <label for="config-direction-model-confidence">方向模型最小置信度</label>
+                <input id="config-direction-model-confidence" type="number" step="0.01" min="0" max="1">
+              </div>
+              <div class="field">
+                <label for="config-app-host">App Host</label>
+                <input id="config-app-host" type="text">
+              </div>
+              <div class="field">
+                <label for="config-app-port">App Port</label>
+                <input id="config-app-port" type="number" min="1">
+              </div>
+              <div class="field">
+                <label for="config-model-dir">模型目录</label>
+                <input id="config-model-dir" type="text">
+              </div>
+            </div>
+            <div class="roi-actions" style="margin-top: 12px;">
+              <button id="config-use-current-roi" class="secondary" type="button">使用当前 ROI</button>
+              <button id="config-save" type="button">保存配置</button>
+            </div>
+            <div id="config-status" class="feedback-status">配置将保存到数据库，不再依赖 `.env` 里的运行时参数。</div>
+            </details>
+          </section>
         </div>
       </div>
     </main>
@@ -937,15 +1106,13 @@ INDEX_HTML = """<!doctype html>
       const directionRoiEl = document.getElementById("direction-roi");
       const floorRoiTextEl = document.getElementById("floor-roi-text");
       const directionRoiTextEl = document.getElementById("direction-roi-text");
+      const configDetailsEl = document.getElementById("config-details");
       const zoomSliderEl = document.getElementById("zoom-slider");
       const zoomReadoutEl = document.getElementById("zoom-readout");
       const zoomOutEl = document.getElementById("zoom-out");
       const zoomInEl = document.getElementById("zoom-in");
       const zoomFitEl = document.getElementById("zoom-fit");
       const zoom100El = document.getElementById("zoom-100");
-      const copyFloorEl = document.getElementById("copy-floor");
-      const copyDirectionEl = document.getElementById("copy-direction");
-      const copyBothEl = document.getElementById("copy-both");
       const resetRoiEl = document.getElementById("reset-roi");
       const floorRotateMinusEl = document.getElementById("floor-rotate-minus");
       const floorRotatePlusEl = document.getElementById("floor-rotate-plus");
@@ -998,6 +1165,33 @@ INDEX_HTML = """<!doctype html>
       const backupImportFileEl = document.getElementById("backup-import-file");
       const backupImportEl = document.getElementById("backup-import");
       const backupStatusEl = document.getElementById("backup-status");
+      const configRtspUrlEl = document.getElementById("config-rtsp-url");
+      const configRtspTransportEl = document.getElementById("config-rtsp-transport");
+      const configElevatorIdEl = document.getElementById("config-elevator-id");
+      const configAllowedFloorsEl = document.getElementById("config-allowed-floors");
+      const configFloorRoiEl = document.getElementById("config-floor-roi");
+      const configDirectionRoiEl = document.getElementById("config-direction-roi");
+      const configSampleIntervalEl = document.getElementById("config-sample-interval");
+      const configStableFramesEl = document.getElementById("config-stable-frames");
+      const configDisconnectTimeoutEl = document.getElementById("config-disconnect-timeout");
+      const configRtspFlushEl = document.getElementById("config-rtsp-flush");
+      const configMqttBrokerEl = document.getElementById("config-mqtt-broker");
+      const configMqttTopicEl = document.getElementById("config-mqtt-topic");
+      const configMqttHeartbeatEl = document.getElementById("config-mqtt-heartbeat");
+      const configMqttClientIdEl = document.getElementById("config-mqtt-client-id");
+      const configTesseractCmdEl = document.getElementById("config-tesseract-cmd");
+      const configLogLevelEl = document.getElementById("config-log-level");
+      const configDirectionThresholdEl = document.getElementById("config-direction-threshold");
+      const configFloorSampleThresholdEl = document.getElementById("config-floor-sample-threshold");
+      const configDirectionSampleThresholdEl = document.getElementById("config-direction-sample-threshold");
+      const configFloorModelConfidenceEl = document.getElementById("config-floor-model-confidence");
+      const configDirectionModelConfidenceEl = document.getElementById("config-direction-model-confidence");
+      const configAppHostEl = document.getElementById("config-app-host");
+      const configAppPortEl = document.getElementById("config-app-port");
+      const configModelDirEl = document.getElementById("config-model-dir");
+      const configUseCurrentRoiEl = document.getElementById("config-use-current-roi");
+      const configSaveEl = document.getElementById("config-save");
+      const configStatusEl = document.getElementById("config-status");
       const floorTrainPillEl = document.getElementById("floor-train-pill");
       const directionTrainPillEl = document.getElementById("direction-train-pill");
       const floorTrainMetricEl = document.getElementById("floor-train-metric");
@@ -1038,6 +1232,7 @@ INDEX_HTML = """<!doctype html>
       let pendingFloorMode = "pending";
       let pendingFloorOrder = "hard";
       let lastTrainingSignature = "";
+      let roiAutoSaveTimer = null;
 
       const directionText = {
         up: "上行",
@@ -1104,6 +1299,11 @@ INDEX_HTML = """<!doctype html>
       function showTrainingNotice(message, tone) {
         trainingNoticeEl.textContent = message;
         trainingNoticeEl.className = `notice show ${tone}`;
+      }
+
+      function setConfigStatus(message, tone = "") {
+        configStatusEl.textContent = message;
+        configStatusEl.className = `feedback-status${tone ? " " + tone : ""}`;
       }
 
       function setBackupStatus(message, tone = "") {
@@ -1326,6 +1526,114 @@ INDEX_HTML = """<!doctype html>
         ]);
         feedbackStatsEl.textContent = `已标楼层 ${feedbackStats.floor}，已标方向 ${feedbackStats.direction}，待标楼层 ${pendingStats.floor}`;
         renderCoverage(coverageStats);
+      }
+
+      function syncConfigRoiInputsFromOverlay() {
+        if (roiState.floor) {
+          configFloorRoiEl.value = `${roiState.floor.x},${roiState.floor.y},${roiState.floor.w},${roiState.floor.h},${roiState.floor.angle.toFixed(1)}`;
+        }
+        if (roiState.direction) {
+          configDirectionRoiEl.value = `${roiState.direction.x},${roiState.direction.y},${roiState.direction.w},${roiState.direction.h},${roiState.direction.angle.toFixed(1)}`;
+        }
+      }
+
+      async function loadConfig() {
+        const response = await fetch("/api/v1/config", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+        const config = await response.json();
+        configRtspUrlEl.value = config.rtsp_url ?? "";
+        configRtspTransportEl.value = config.rtsp_transport ?? "tcp";
+        configElevatorIdEl.value = config.elevator_id ?? "";
+        configAllowedFloorsEl.value = config.allowed_floors_text ?? "";
+        configFloorRoiEl.value = config.floor_roi_text ?? "";
+        configDirectionRoiEl.value = config.direction_roi_text ?? "";
+        configSampleIntervalEl.value = String(config.sample_interval_ms ?? 500);
+        configStableFramesEl.value = String(config.stable_frames ?? 3);
+        configDisconnectTimeoutEl.value = String(config.disconnect_timeout_seconds ?? 10);
+        configRtspFlushEl.value = String(config.rtsp_flush_frames ?? 8);
+        configMqttBrokerEl.value = config.mqtt_broker_url ?? "";
+        configMqttTopicEl.value = config.mqtt_topic_state ?? "";
+        configMqttHeartbeatEl.value = String(config.mqtt_heartbeat_seconds ?? 30);
+        configMqttClientIdEl.value = config.mqtt_client_id ?? "";
+        configTesseractCmdEl.value = config.tesseract_cmd ?? "";
+        configLogLevelEl.value = config.log_level ?? "INFO";
+        configDirectionThresholdEl.value = String(config.direction_match_threshold ?? 0.7);
+        configFloorSampleThresholdEl.value = String(config.floor_sample_match_threshold ?? 0.74);
+        configDirectionSampleThresholdEl.value = String(config.direction_sample_match_threshold ?? 0.72);
+        configFloorModelConfidenceEl.value = String(config.floor_model_min_confidence ?? 0.75);
+        configDirectionModelConfidenceEl.value = String(config.direction_model_min_confidence ?? 0.75);
+        configAppHostEl.value = config.app_host ?? "";
+        configAppPortEl.value = String(config.app_port ?? 8000);
+        configModelDirEl.value = config.model_dir ?? "";
+      }
+
+      function buildConfigPayload() {
+        return {
+          app_host: configAppHostEl.value.trim(),
+          app_port: Number(configAppPortEl.value),
+          model_dir: configModelDirEl.value.trim(),
+          rtsp_url: configRtspUrlEl.value.trim(),
+          rtsp_transport: configRtspTransportEl.value,
+          rtsp_flush_frames: Number(configRtspFlushEl.value),
+          elevator_id: configElevatorIdEl.value.trim(),
+          floor_roi: configFloorRoiEl.value.trim(),
+          direction_roi: configDirectionRoiEl.value.trim(),
+          allowed_floors: configAllowedFloorsEl.value.trim(),
+          sample_interval_ms: Number(configSampleIntervalEl.value),
+          stable_frames: Number(configStableFramesEl.value),
+          disconnect_timeout_seconds: Number(configDisconnectTimeoutEl.value),
+          mqtt_broker_url: configMqttBrokerEl.value.trim(),
+          mqtt_topic_state: configMqttTopicEl.value.trim(),
+          mqtt_heartbeat_seconds: Number(configMqttHeartbeatEl.value),
+          mqtt_client_id: configMqttClientIdEl.value.trim(),
+          tesseract_cmd: configTesseractCmdEl.value.trim() || null,
+          direction_match_threshold: Number(configDirectionThresholdEl.value),
+          floor_sample_match_threshold: Number(configFloorSampleThresholdEl.value),
+          direction_sample_match_threshold: Number(configDirectionSampleThresholdEl.value),
+          floor_model_min_confidence: Number(configFloorModelConfidenceEl.value),
+          direction_model_min_confidence: Number(configDirectionModelConfidenceEl.value),
+          log_level: configLogLevelEl.value.trim() || "INFO",
+        };
+      }
+
+      async function saveConfig(button = null, silent = false) {
+        const previous = button ? button.textContent : "";
+        if (button) {
+          button.disabled = true;
+          button.textContent = "保存中";
+        }
+        try {
+          const response = await fetch("/api/v1/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(buildConfigPayload()),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            if (!silent) {
+              setConfigStatus(formatBackendMessage(payload.error) || "配置保存失败", "bad");
+              configDetailsEl.open = true;
+            }
+            return;
+          }
+          await Promise.all([
+            loadConfig(),
+            loadRoi(),
+            refreshFeedbackStats(),
+            refreshTrainingStatus(),
+          ]);
+          setConfigStatus(
+            silent ? "ROI 已自动保存到数据库。" : "配置已保存到数据库，并已应用到当前服务。",
+            "ok",
+          );
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.textContent = previous;
+          }
+        }
       }
 
       function renderCandidateList(element, candidates) {
@@ -1774,18 +2082,6 @@ INDEX_HTML = """<!doctype html>
         updateZoom(clamp(fit || 1, 0.1, 3));
       }
 
-      async function copyText(text, button) {
-        const original = button.textContent;
-        try {
-          await navigator.clipboard.writeText(text);
-          button.textContent = "已复制";
-          setTimeout(() => { button.textContent = original; }, 1200);
-        } catch {
-          button.textContent = "复制失败";
-          setTimeout(() => { button.textContent = original; }, 1200);
-        }
-      }
-
       function renderRoiBox(element, rect) {
         if (!rect || !roiState.frameWidth || !roiState.frameHeight) {
           element.style.display = "none";
@@ -1805,6 +2101,16 @@ INDEX_HTML = """<!doctype html>
         renderRoiBox(directionRoiEl, roiState.direction);
         floorRoiTextEl.textContent = roiState.floor ? roiEnvLine("FLOOR_ROI", roiState.floor) : "FLOOR_ROI=--";
         directionRoiTextEl.textContent = roiState.direction ? roiEnvLine("DIRECTION_ROI", roiState.direction) : "DIRECTION_ROI=--";
+        syncConfigRoiInputsFromOverlay();
+      }
+
+      function scheduleRoiAutoSave() {
+        if (roiAutoSaveTimer) {
+          clearTimeout(roiAutoSaveTimer);
+        }
+        roiAutoSaveTimer = setTimeout(() => {
+          saveConfig(null, true);
+        }, 600);
       }
 
       function getRectByTarget(target) {
@@ -1862,9 +2168,13 @@ INDEX_HTML = """<!doctype html>
       }
 
       function onPointerUp() {
+        const hadDrag = Boolean(dragState.target);
         dragState.target = null;
         dragState.mode = null;
         dragState.startRect = null;
+        if (hadDrag) {
+          scheduleRoiAutoSave();
+        }
       }
 
       async function loadRoi() {
@@ -1915,6 +2225,7 @@ INDEX_HTML = """<!doctype html>
         const [stateResponse] = await Promise.all([
           fetch("/api/v1/state"),
           loadRoi(),
+          loadConfig(),
           refreshFeedbackStats(),
           refreshPendingFloorList(),
           refreshRecognitionDebug(),
@@ -1943,9 +2254,6 @@ INDEX_HTML = """<!doctype html>
       window.addEventListener("pointerup", onPointerUp);
       window.addEventListener("pointercancel", onPointerUp);
 
-      copyFloorEl.addEventListener("click", () => copyText(floorRoiTextEl.textContent, copyFloorEl));
-      copyDirectionEl.addEventListener("click", () => copyText(directionRoiTextEl.textContent, copyDirectionEl));
-      copyBothEl.addEventListener("click", () => copyText(`${floorRoiTextEl.textContent}\\n${directionRoiTextEl.textContent}`, copyBothEl));
       resetRoiEl.addEventListener("click", () => {
         if (!roiState.initialFloor || !roiState.initialDirection) {
           return;
@@ -1953,22 +2261,27 @@ INDEX_HTML = """<!doctype html>
         roiState.floor = cloneRect(roiState.initialFloor);
         roiState.direction = cloneRect(roiState.initialDirection);
         renderRoiPanel();
+        scheduleRoiAutoSave();
       });
       floorRotateMinusEl.addEventListener("click", () => {
         roiState.floor.angle = Number((roiState.floor.angle - 1).toFixed(1));
         renderRoiPanel();
+        scheduleRoiAutoSave();
       });
       floorRotatePlusEl.addEventListener("click", () => {
         roiState.floor.angle = Number((roiState.floor.angle + 1).toFixed(1));
         renderRoiPanel();
+        scheduleRoiAutoSave();
       });
       directionRotateMinusEl.addEventListener("click", () => {
         roiState.direction.angle = Number((roiState.direction.angle - 1).toFixed(1));
         renderRoiPanel();
+        scheduleRoiAutoSave();
       });
       directionRotatePlusEl.addEventListener("click", () => {
         roiState.direction.angle = Number((roiState.direction.angle + 1).toFixed(1));
         renderRoiPanel();
+        scheduleRoiAutoSave();
       });
       floorAcceptEl.addEventListener("click", () => {
         if (!currentState?.floor) {
@@ -2072,6 +2385,11 @@ INDEX_HTML = """<!doctype html>
       reloadModelsEl.addEventListener("click", () => reloadModels(reloadModelsEl));
       backupExportEl.addEventListener("click", () => exportBackup(backupExportEl));
       backupImportEl.addEventListener("click", () => importBackup(backupImportEl));
+      configUseCurrentRoiEl.addEventListener("click", () => {
+        syncConfigRoiInputsFromOverlay();
+        setConfigStatus("已把当前画面上的 ROI 填入配置表单。", "ok");
+      });
+      configSaveEl.addEventListener("click", () => saveConfig(configSaveEl));
       zoomSliderEl.addEventListener("input", (event) => updateZoom(event.target.value));
       zoomOutEl.addEventListener("click", () => updateZoom(roiState.zoom - 0.1));
       zoomInEl.addEventListener("click", () => updateZoom(roiState.zoom + 0.1));

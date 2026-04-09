@@ -140,6 +140,29 @@ class StateManager:
             self._last_publish_monotonic = time.monotonic()
         await self._broadcast(payload, listeners, subscribers, changed=True)
 
+    async def update_config(
+        self,
+        *,
+        elevator_id: str,
+        stable_frames: int,
+        heartbeat_seconds: int,
+    ) -> None:
+        async with self._lock:
+            changed = self._state.elevator_id != elevator_id
+            self._stable_frames = stable_frames
+            self._heartbeat_seconds = heartbeat_seconds
+            if not changed:
+                return
+            self._state = self._state.with_updates(
+                elevator_id=elevator_id,
+                published_ts=utcnow(),
+            )
+            payload = ElevatorStatePayload.from_state(self._state)
+            listeners = list(self._listeners)
+            subscribers = list(self._subscribers)
+            self._last_publish_monotonic = time.monotonic()
+        await self._broadcast(payload, listeners, subscribers, changed=True)
+
     async def _broadcast(
         self,
         payload: ElevatorStatePayload,

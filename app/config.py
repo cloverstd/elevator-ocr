@@ -13,6 +13,14 @@ from app.models import ROI
 def _parse_roi(value: Any) -> ROI:
     if isinstance(value, ROI):
         return value
+    if isinstance(value, dict):
+        return ROI(
+            int(value["x"]),
+            int(value["y"]),
+            int(value["w"]),
+            int(value["h"]),
+            float(value.get("angle", 0.0)),
+        )
     if isinstance(value, str):
         parts = [item.strip() for item in value.split(",")]
         if len(parts) == 4:
@@ -51,7 +59,6 @@ def _parse_allowed_floors(value: Any) -> list[str]:
             return [str(item) for item in loaded]
         return [item.strip() for item in value.split(",") if item.strip()]
     raise ValueError("Invalid ALLOWED_FLOORS value")
-
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -110,6 +117,40 @@ class Settings(BaseSettings):
             if normalized in {"tcp", "udp"}:
                 return normalized
         raise ValueError("RTSP_TRANSPORT must be tcp or udp")
+
+
+PERSISTED_CONFIG_FIELDS = tuple(field_name for field_name in Settings.model_fields if field_name != "data_dir")
+
+
+def roi_to_text(roi: ROI) -> str:
+    return f"{roi.x},{roi.y},{roi.w},{roi.h},{roi.angle:.1f}"
+
+
+def settings_to_persisted_dict(settings: Settings) -> dict[str, Any]:
+    payload = settings.model_dump(mode="python")
+    return {field_name: payload[field_name] for field_name in PERSISTED_CONFIG_FIELDS}
+
+
+def settings_to_api_dict(settings: Settings) -> dict[str, Any]:
+    payload = settings.model_dump(mode="python")
+    payload["allowed_floors_text"] = ",".join(settings.allowed_floors)
+    payload["floor_roi_text"] = roi_to_text(settings.floor_roi)
+    payload["direction_roi_text"] = roi_to_text(settings.direction_roi)
+    return payload
+
+
+def build_settings_from_payload(current: Settings, payload: dict[str, Any]) -> Settings:
+    merged = current.model_dump(mode="python")
+    for key, value in payload.items():
+        if key not in Settings.model_fields or key == "data_dir":
+            continue
+        if key in {"floor_roi", "direction_roi"}:
+            merged[key] = _parse_roi(value)
+        elif key == "allowed_floors":
+            merged[key] = _parse_allowed_floors(value)
+        else:
+            merged[key] = value
+    return Settings(**merged)
 
 
 @lru_cache(maxsize=1)

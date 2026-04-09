@@ -107,6 +107,11 @@ class RtspWorker:
         self._stop_event.set()
         if self._task is not None:
             await self._task
+            self._task = None
+
+    async def restart(self) -> None:
+        await self.stop()
+        await self.start()
 
     async def _run(self) -> None:
         while not self._stop_event.is_set():

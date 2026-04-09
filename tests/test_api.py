@@ -4,6 +4,7 @@ from pathlib import Path
 
 import cv2
 from app.config import Settings
+from app.config_store import ConfigStore
 from app.feedback_store import FeedbackRecord, PendingSampleRecord
 from app.main import create_app
 from app.models import RecognitionCandidate, RecognitionResult, utcnow
@@ -152,6 +153,45 @@ async def test_model_reload_endpoint_returns_flags() -> None:
     assert payload["status"] == "ok"
     assert "floor_loaded" in payload
     assert "direction_loaded" in payload
+
+
+async def test_config_endpoint_persists_to_database(tmp_path: Path) -> None:
+    settings = Settings(data_dir=str(tmp_path / "data"))
+    app = create_app(settings, start_runtime=False)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        save_response = await client.post(
+            "/api/v1/config",
+            json={
+                "rtsp_url": "rtsp://camera/new",
+                "rtsp_transport": "udp",
+                "floor_roi": "10,20,30,40,5",
+                "direction_roi": "50,60,70,80,-3",
+                "allowed_floors": "-2,-1,1,2,35",
+                "sample_interval_ms": 300,
+                "mqtt_topic_state": "demo/elevator/state",
+            },
+        )
+        config_response = await client.get("/api/v1/config")
+        roi_response = await client.get("/api/v1/roi")
+
+    assert save_response.status_code == 200
+    assert config_response.status_code == 200
+    payload = config_response.json()
+    assert payload["rtsp_url"] == "rtsp://camera/new"
+    assert payload["rtsp_transport"] == "udp"
+    assert payload["allowed_floors"] == ["-2", "-1", "1", "2", "35"]
+    assert roi_response.json()["floor_roi"]["angle"] == 5.0
+
+    loaded = ConfigStore(Settings(data_dir=str(tmp_path / "data"))).load_settings(
+        Settings(data_dir=str(tmp_path / "data"))
+    )
+    assert loaded.rtsp_url == "rtsp://camera/new"
+    assert loaded.floor_roi.x == 10
+    assert loaded.direction_roi.angle == -3.0
 
 
 async def test_pending_sample_roundtrip(tmp_path: Path) -> None:
