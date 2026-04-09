@@ -1,0 +1,21 @@
+services:
+  elevator-ocr:
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/app
+      - --reload-dir
+      - /app/scripts
+    volumes:
+      - ./app:/app/app
+      - ./img:/app/img
+      - ./scripts:/app/scripts
+      - ./data:/app/data
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./README.md:/app/README.md:ro
