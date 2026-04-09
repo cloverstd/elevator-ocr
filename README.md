@@ -56,6 +56,19 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml restart elevator-
 
 Rebuild is only needed when dependencies or the base image change, for example after editing `pyproject.toml` or `Dockerfile`.
 
+## CI and image publishing
+
+- GitHub Actions `Test` runs `ruff check .` and `pytest -q` on `push` and `pull_request`
+- Every push to `main` publishes a preview image to GHCR:
+  - `ghcr.io/cloverstd/elevator-ocr:main`
+  - `ghcr.io/cloverstd/elevator-ocr:test`
+  - `ghcr.io/cloverstd/elevator-ocr:test-<run_number>`
+  - `ghcr.io/cloverstd/elevator-ocr:sha-<commit>`
+- Pushing a tag like `v1.2.3` triggers the release workflow:
+  - publishes release images to GHCR
+  - creates a GitHub Release
+  - tags include `v1.2.3`, `1.2.3`, `1.2`, `1`
+
 ## State payload
 
 HTTP, SSE, and MQTT use the same JSON payload:
