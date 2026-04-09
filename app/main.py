@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from app.auto_capture import AutoCaptureManager
+from app.backup import BackupManager
 from app.config import Settings, get_settings
 from app.debug_store import RecognitionDebugStore
 from app.feedback_models import (
@@ -45,6 +47,7 @@ class AppServices:
         self.frame_store = FrameStore(settings)
         self.debug_store = RecognitionDebugStore()
         self.feedback_store = FeedbackStore(settings)
+        self.backup = BackupManager(settings.data_dir)
         self.auto_capture = AutoCaptureManager(self.feedback_store)
         self.floor_sample_matcher = SamplePrototypeMatcher("floor", settings, self.feedback_store)
         self.direction_sample_matcher = SamplePrototypeMatcher("direction", settings, self.feedback_store)
@@ -113,6 +116,16 @@ class AppServices:
     async def reload_sample_matchers(self) -> None:
         self.floor_sample_matcher.reload()
         self.direction_sample_matcher.reload()
+
+    async def reload_models(self) -> dict[str, bool]:
+        floor_loaded = self.floor_classifier.reload()
+        direction_loaded = self.direction_classifier.reload()
+        self.training.set_model_loaded("floor", floor_loaded)
+        self.training.set_model_loaded("direction", direction_loaded)
+        return {
+            "floor_loaded": floor_loaded,
+            "direction_loaded": direction_loaded,
+        }
 
 
 def create_app(settings: Settings | None = None, *, start_runtime: bool = True) -> FastAPI:
@@ -216,6 +229,31 @@ def create_app(settings: Settings | None = None, *, start_runtime: bool = True) 
         return FloorCoverageResponse.model_validate(
             services.feedback_store.floor_coverage(services.settings.allowed_floors)
         )
+
+    @app.get("/api/v1/backup/export")
+    async def export_backup() -> Response:
+        payload = services.backup.export_zip()
+        filename = f"elevator-ocr-backup-{datetime.now(tz=UTC).strftime('%Y%m%d-%H%M%S')}.zip"
+        return Response(
+            content=payload,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.post("/api/v1/backup/import")
+    async def import_backup(request: Request) -> JSONResponse:
+        payload = await request.body()
+        if not payload:
+            return JSONResponse({"error": "empty backup payload"}, status_code=400)
+        try:
+            services.backup.import_zip(payload)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        except Exception as exc:
+            return JSONResponse({"error": str(exc)}, status_code=500)
+        await services.reload_sample_matchers()
+        loaded = await services.reload_models()
+        return JSONResponse({"status": "ok", **loaded})
 
     @app.post("/api/v1/feedback")
     async def feedback(request: FeedbackRequest) -> JSONResponse:
@@ -341,15 +379,13 @@ def create_app(settings: Settings | None = None, *, start_runtime: bool = True) 
 
     @app.post("/api/v1/models/reload")
     async def reload_models() -> JSONResponse:
-        floor_loaded = await services.reload_model("floor")
-        direction_loaded = await services.reload_model("direction")
-        services.training.set_model_loaded("floor", floor_loaded, "model reloaded manually")
-        services.training.set_model_loaded("direction", direction_loaded, "model reloaded manually")
+        loaded = await services.reload_models()
+        services.training.set_model_loaded("floor", loaded["floor_loaded"], "model reloaded manually")
+        services.training.set_model_loaded("direction", loaded["direction_loaded"], "model reloaded manually")
         return JSONResponse(
             {
                 "status": "ok",
-                "floor_loaded": floor_loaded,
-                "direction_loaded": direction_loaded,
+                **loaded,
             }
         )
 

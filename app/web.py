@@ -255,10 +255,14 @@ INDEX_HTML = """<!doctype html>
         gap: 16px;
         align-items: start;
       }
-      .bottom-dual {
+      .content-stack {
         display: grid;
-        grid-template-columns: minmax(360px, 0.82fr) minmax(0, 1.18fr);
         gap: 20px;
+      }
+      .triple-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
         align-items: start;
       }
       .section-stack {
@@ -325,11 +329,6 @@ INDEX_HTML = """<!doctype html>
         margin: 10px 0 0;
         color: var(--muted);
         font-size: 13px;
-      }
-      .preview-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
       }
       .preview-card {
         padding: 14px 16px;
@@ -476,6 +475,23 @@ INDEX_HTML = """<!doctype html>
         align-items: center;
         justify-content: space-between;
         gap: 10px;
+      }
+      .backup-bar {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 12px;
+        background: rgba(23, 32, 42, 0.05);
+        display: grid;
+        gap: 10px;
+      }
+      .backup-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .backup-file {
+        max-width: 100%;
       }
       .status-pill {
         display: inline-flex;
@@ -646,12 +662,10 @@ INDEX_HTML = """<!doctype html>
         .layout {
           grid-template-columns: 1fr;
         }
-        .bottom-dual,
         .section-dual,
-        .preview-grid {
-          grid-template-columns: 1fr;
-        }
+        .triple-grid,
         .training-grid,
+        .field-grid,
         .stats-emphasis,
         .coverage-grid {
           grid-template-columns: 1fr;
@@ -711,114 +725,110 @@ INDEX_HTML = """<!doctype html>
               <p id="updated" class="footer">等待状态更新...</p>
             </div>
             <div class="roi-tools">
-              <div class="section-dual">
-                <div class="section-stack">
-                  <div class="roi-card">
-                    <div class="roi-head">
-                      <h2 class="roi-title">楼层 ROI</h2>
-                      <div class="roi-actions">
-                        <button id="floor-rotate-minus" class="secondary" type="button">-1°</button>
-                        <button id="floor-rotate-plus" class="secondary" type="button">+1°</button>
-                        <button id="copy-floor" type="button">复制</button>
-                      </div>
-                    </div>
-                    <p id="floor-roi-text" class="roi-code">FLOOR_ROI=--</p>
-                  </div>
-                  <div class="roi-card">
-                    <div class="roi-head">
-                      <h2 class="roi-title">方向 ROI</h2>
-                      <div class="roi-actions">
-                        <button id="direction-rotate-minus" class="secondary" type="button">-1°</button>
-                        <button id="direction-rotate-plus" class="secondary" type="button">+1°</button>
-                        <button id="copy-direction" type="button">复制</button>
-                      </div>
-                    </div>
-                    <p id="direction-roi-text" class="roi-code">DIRECTION_ROI=--</p>
-                  </div>
-                  <div class="roi-card">
+              <div class="section-stack">
+                <div class="roi-card">
+                  <div class="roi-head">
+                    <h2 class="roi-title">楼层 ROI</h2>
                     <div class="roi-actions">
-                      <button id="copy-both" type="button">复制两项</button>
-                      <button id="reset-roi" class="secondary" type="button">重置</button>
+                      <button id="floor-rotate-minus" class="secondary" type="button">-1°</button>
+                      <button id="floor-rotate-plus" class="secondary" type="button">+1°</button>
+                      <button id="copy-floor" type="button">复制</button>
                     </div>
-                    <p class="hint">拖动框内部可移动位置，拖动圆点可调整大小。数值使用原始像素坐标，可直接粘贴到 `.env`。</p>
                   </div>
+                  <p id="floor-roi-text" class="roi-code">FLOOR_ROI=--</p>
                 </div>
-                <div class="section-stack">
-                  <div class="stats-card">
-                    <h3 class="preview-title">标注统计</h3>
-                  <p id="feedback-stats">已标楼层 0，已标方向 0，待标楼层 0</p>
-                  <div class="stats-emphasis">
-                    <div class="stat">
-                      <span class="label">当前楼层</span>
-                      <span id="floor-prediction" class="value">--</span>
-                      </div>
-                      <div class="stat">
-                        <span class="label">当前方向</span>
-                        <span id="direction-prediction" class="value">未知</span>
-                      </div>
-                      <div class="stat">
-                        <span class="label">训练状态</span>
-                      <span id="training-overview" class="value">空闲</span>
+                <div class="roi-card">
+                  <div class="roi-head">
+                    <h2 class="roi-title">方向 ROI</h2>
+                    <div class="roi-actions">
+                      <button id="direction-rotate-minus" class="secondary" type="button">-1°</button>
+                      <button id="direction-rotate-plus" class="secondary" type="button">+1°</button>
+                      <button id="copy-direction" type="button">复制</button>
                     </div>
                   </div>
-                  <div id="floor-coverage-summary" class="coverage-summary">楼层覆盖 0 / 0，等待样本。</div>
-                  <div id="floor-coverage-grid" class="coverage-grid"></div>
+                  <p id="direction-roi-text" class="roi-code">DIRECTION_ROI=--</p>
                 </div>
-                  <div class="stats-card">
-                    <h3 class="preview-title">识别调试</h3>
-                    <p id="debug-floor-source">楼层来源：--</p>
-                    <ul id="debug-floor-candidates" class="debug-list">
-                      <li>还没有楼层候选。</li>
-                    </ul>
-                    <p id="debug-direction-source">方向来源：--</p>
-                    <ul id="debug-direction-candidates" class="debug-list">
-                      <li>还没有方向候选。</li>
-                    </ul>
+                <div class="roi-card">
+                  <div class="roi-actions">
+                    <button id="copy-both" type="button">复制两项</button>
+                    <button id="reset-roi" class="secondary" type="button">重置</button>
                   </div>
-                </div>
-              </div>
-              <div class="preview-grid">
-                <div class="preview-card">
-                  <h3 class="preview-title">楼层裁剪</h3>
-                  <img id="floor-preview" src="/api/v1/frame/floor.jpg" alt="楼层裁剪">
-                  <div class="preview-meta">
-                    <div class="prediction">当前预测：<strong id="floor-inline-prediction">--</strong></div>
-                    <div class="feedback-row">
-                      <button id="floor-accept" type="button">预测正确</button>
-                    </div>
-                    <input id="floor-label-input" class="feedback-input" type="text" placeholder="输入正确楼层，例如 35 或 -2">
-                    <div class="feedback-row">
-                      <button id="floor-submit" class="secondary" type="button">提交楼层标注</button>
-                    </div>
-                    <div id="floor-feedback-status" class="feedback-status"></div>
-                  </div>
-                </div>
-                <div class="preview-card">
-                  <h3 class="preview-title">方向裁剪</h3>
-                  <img id="direction-preview" src="/api/v1/frame/direction.jpg" alt="方向裁剪">
-                  <div class="preview-meta">
-                    <div class="prediction">当前预测：<strong id="direction-inline-prediction">未知</strong></div>
-                    <div class="feedback-row">
-                      <button id="direction-accept" type="button">预测正确</button>
-                    </div>
-                    <select id="direction-label-input" class="feedback-select">
-                      <option value="up">上行</option>
-                      <option value="down">下行</option>
-                      <option value="idle">静止</option>
-                      <option value="unknown">未知</option>
-                    </select>
-                    <div class="feedback-row">
-                      <button id="direction-submit" class="secondary" type="button">提交方向标注</button>
-                    </div>
-                    <div id="direction-feedback-status" class="feedback-status"></div>
-                  </div>
+                  <p class="hint">拖动框内部可移动位置，拖动圆点可调整大小。数值使用原始像素坐标，可直接粘贴到 `.env`。</p>
                 </div>
               </div>
             </div>
           </section>
         </div>
-        <section class="bottom-dual">
-          <div class="stats-card">
+        <div class="content-stack">
+          <section class="triple-grid">
+            <div class="preview-card">
+              <h3 class="preview-title">楼层裁剪</h3>
+              <img id="floor-preview" src="/api/v1/frame/floor.jpg" alt="楼层裁剪">
+              <div class="preview-meta">
+                <div class="prediction">当前预测：<strong id="floor-inline-prediction">--</strong></div>
+                <div class="feedback-row">
+                  <button id="floor-accept" type="button">预测正确</button>
+                </div>
+                <input id="floor-label-input" class="feedback-input" type="text" placeholder="输入正确楼层，例如 35 或 -2">
+                <div class="feedback-row">
+                  <button id="floor-submit" class="secondary" type="button">提交楼层标注</button>
+                </div>
+                <div id="floor-feedback-status" class="feedback-status"></div>
+              </div>
+            </div>
+            <div class="preview-card">
+              <h3 class="preview-title">方向裁剪</h3>
+              <img id="direction-preview" src="/api/v1/frame/direction.jpg" alt="方向裁剪">
+              <div class="preview-meta">
+                <div class="prediction">当前预测：<strong id="direction-inline-prediction">未知</strong></div>
+                <div class="feedback-row">
+                  <button id="direction-accept" type="button">预测正确</button>
+                </div>
+                <select id="direction-label-input" class="feedback-select">
+                  <option value="up">上行</option>
+                  <option value="down">下行</option>
+                  <option value="idle">静止</option>
+                  <option value="unknown">未知</option>
+                </select>
+                <div class="feedback-row">
+                  <button id="direction-submit" class="secondary" type="button">提交方向标注</button>
+                </div>
+                <div id="direction-feedback-status" class="feedback-status"></div>
+              </div>
+            </div>
+            <div class="stats-card">
+              <h3 class="preview-title">识别调试</h3>
+              <p id="debug-floor-source">楼层来源：--</p>
+              <ul id="debug-floor-candidates" class="debug-list">
+                <li>还没有楼层候选。</li>
+              </ul>
+              <p id="debug-direction-source">方向来源：--</p>
+              <ul id="debug-direction-candidates" class="debug-list">
+                <li>还没有方向候选。</li>
+              </ul>
+            </div>
+          </section>
+          <section class="stats-card">
+            <h3 class="preview-title">标注统计</h3>
+            <p id="feedback-stats">已标楼层 0，已标方向 0，待标楼层 0</p>
+            <div class="stats-emphasis">
+              <div class="stat">
+                <span class="label">当前楼层</span>
+                <span id="floor-prediction" class="value">--</span>
+              </div>
+              <div class="stat">
+                <span class="label">当前方向</span>
+                <span id="direction-prediction" class="value">未知</span>
+              </div>
+              <div class="stat">
+                <span class="label">训练状态</span>
+                <span id="training-overview" class="value">空闲</span>
+              </div>
+            </div>
+            <div id="floor-coverage-summary" class="coverage-summary">楼层覆盖 0 / 0，等待样本。</div>
+            <div id="floor-coverage-grid" class="coverage-grid"></div>
+          </section>
+          <section class="stats-card">
             <h3 class="preview-title">待标楼层样本</h3>
             <div class="pending-head">
               <div class="segmented">
@@ -848,9 +858,17 @@ INDEX_HTML = """<!doctype html>
                 <div class="feedback-status">还没有待标历史样本。</div>
               </div>
             </div>
-          </div>
-          <div class="stats-card">
+          </section>
+          <section class="stats-card">
             <h3 class="preview-title">模型训练</h3>
+            <div class="backup-bar">
+              <div class="backup-actions">
+                <button id="backup-export" type="button">导出备份</button>
+                <input id="backup-import-file" class="backup-file" type="file" accept=".zip,application/zip">
+                <button id="backup-import" class="secondary" type="button">导入备份</button>
+              </div>
+              <div id="backup-status" class="feedback-status">导出会下载当前 `data/` 下的标注、样本和模型。导入后会覆盖当前数据并重新加载样本与模型。</div>
+            </div>
             <div class="field-grid">
               <div class="field">
                 <label for="train-epochs">训练轮数</label>
@@ -900,8 +918,8 @@ INDEX_HTML = """<!doctype html>
                 <pre id="direction-train-log" class="training-log">还没有训练记录。</pre>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </main>
     <script>
@@ -976,6 +994,10 @@ INDEX_HTML = """<!doctype html>
       const trainFloorEl = document.getElementById("train-floor");
       const trainDirectionEl = document.getElementById("train-direction");
       const reloadModelsEl = document.getElementById("reload-models");
+      const backupExportEl = document.getElementById("backup-export");
+      const backupImportFileEl = document.getElementById("backup-import-file");
+      const backupImportEl = document.getElementById("backup-import");
+      const backupStatusEl = document.getElementById("backup-status");
       const floorTrainPillEl = document.getElementById("floor-train-pill");
       const directionTrainPillEl = document.getElementById("direction-train-pill");
       const floorTrainMetricEl = document.getElementById("floor-train-metric");
@@ -1082,6 +1104,11 @@ INDEX_HTML = """<!doctype html>
       function showTrainingNotice(message, tone) {
         trainingNoticeEl.textContent = message;
         trainingNoticeEl.className = `notice show ${tone}`;
+      }
+
+      function setBackupStatus(message, tone = "") {
+        backupStatusEl.textContent = message;
+        backupStatusEl.className = `feedback-status${tone ? " " + tone : ""}`;
       }
 
       function updateHistoryModeButtons() {
@@ -1647,6 +1674,69 @@ INDEX_HTML = """<!doctype html>
         }
       }
 
+      async function exportBackup(button) {
+        const previous = button.textContent;
+        button.disabled = true;
+        button.textContent = "导出中";
+        try {
+          const response = await fetch("/api/v1/backup/export", { cache: "no-store" });
+          if (!response.ok) {
+            setBackupStatus("导出失败", "bad");
+            return;
+          }
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          const disposition = response.headers.get("Content-Disposition") ?? "";
+          const matched = disposition.match(/filename="([^"]+)"/);
+          link.href = url;
+          link.download = matched?.[1] ?? "elevator-ocr-backup.zip";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+          setBackupStatus("备份已导出。", "ok");
+        } finally {
+          button.disabled = false;
+          button.textContent = previous;
+        }
+      }
+
+      async function importBackup(button) {
+        const file = backupImportFileEl.files?.[0];
+        if (!file) {
+          setBackupStatus("请先选择一个 zip 备份文件。", "bad");
+          return;
+        }
+        const previous = button.textContent;
+        button.disabled = true;
+        button.textContent = "导入中";
+        try {
+          const response = await fetch("/api/v1/backup/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/zip" },
+            body: await file.arrayBuffer(),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            setBackupStatus(formatBackendMessage(payload.error) || "导入失败", "bad");
+            return;
+          }
+          currentPendingFloor = null;
+          selectedPendingFloorIds = new Set();
+          await Promise.all([
+            refreshFeedbackStats(),
+            refreshPendingFloorList(),
+            refreshTrainingStatus(),
+            refreshRecognitionDebug(),
+          ]);
+          setBackupStatus("备份已导入，样本和模型已重新加载。", "ok");
+        } finally {
+          button.disabled = false;
+          button.textContent = previous;
+        }
+      }
+
       function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
       }
@@ -1980,6 +2070,8 @@ INDEX_HTML = """<!doctype html>
       trainFloorEl.addEventListener("click", () => startTraining("floor", trainFloorEl));
       trainDirectionEl.addEventListener("click", () => startTraining("direction", trainDirectionEl));
       reloadModelsEl.addEventListener("click", () => reloadModels(reloadModelsEl));
+      backupExportEl.addEventListener("click", () => exportBackup(backupExportEl));
+      backupImportEl.addEventListener("click", () => importBackup(backupImportEl));
       zoomSliderEl.addEventListener("input", (event) => updateZoom(event.target.value));
       zoomOutEl.addEventListener("click", () => updateZoom(roiState.zoom - 0.1));
       zoomInEl.addEventListener("click", () => updateZoom(roiState.zoom + 0.1));

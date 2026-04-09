@@ -375,6 +375,55 @@ async def test_feedback_coverage_endpoint_reports_counts_per_floor(tmp_path: Pat
     assert counts["2"] == 0
 
 
+async def test_backup_export_import_roundtrip(tmp_path: Path) -> None:
+    source_app = create_app(
+        Settings(data_dir=str(tmp_path / "source-data"), allowed_floors=["-1", "1", "35"]),
+        start_runtime=False,
+    )
+    image = np.full((24, 36, 3), 120, dtype=np.uint8)
+    ok, encoded = cv2.imencode(".jpg", image)
+    assert ok
+    image_path = source_app.state.services.feedback_store.save_sample("floor", encoded.tobytes())
+    source_app.state.services.feedback_store.insert_label(
+        FeedbackRecord(
+            kind="floor",
+            predicted_label="35",
+            confirmed_label="35",
+            confidence=91.0,
+            elevator_id="e1",
+            roi={"x": 0, "y": 0, "w": 10, "h": 10, "angle": 0.0},
+            image_path=image_path,
+            accepted_prediction=True,
+        )
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=source_app),
+        base_url="http://testserver",
+    ) as client:
+        export_response = await client.get("/api/v1/backup/export")
+
+    target_app = create_app(
+        Settings(data_dir=str(tmp_path / "target-data"), allowed_floors=["-1", "1", "35"]),
+        start_runtime=False,
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=target_app),
+        base_url="http://testserver",
+    ) as client:
+        import_response = await client.post(
+            "/api/v1/backup/import",
+            content=export_response.content,
+            headers={"Content-Type": "application/zip"},
+        )
+        stats_response = await client.get("/api/v1/feedback/stats")
+
+    assert export_response.status_code == 200
+    assert export_response.content[:2] == b"PK"
+    assert import_response.status_code == 200
+    assert stats_response.json() == {"floor": 1, "direction": 0}
+
+
 async def test_pending_batch_label_accepts_selected_predictions(tmp_path: Path) -> None:
     settings = Settings(data_dir=str(tmp_path / "data"))
     app = create_app(settings, start_runtime=False)
